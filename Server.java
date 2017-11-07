@@ -129,7 +129,17 @@ public class Server
 
             while(true)
             {
-                
+                String message = server.checkInput();
+                System.out.println(message);
+
+
+                if(Integer.valueOf(message) == optionsSelected){
+                    System.out.println("Same security options have been selected"); 
+                }else{
+                    System.out.println("ERROR: Different security options have been selected"); 
+
+                }
+
 
             }
         }
