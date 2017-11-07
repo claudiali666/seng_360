@@ -1,80 +1,48 @@
-
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.net.ServerSocket;
+import java.io.*;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.util.Scanner;
 
 
-public class Server
+public class Client
 {
     static final int CONFIDENTIALITY = 4;
     static final int INTEGRITY = 2;
     static final int AUTHENTICATION = 1;
 
-    static boolean confidentiality;
-    static boolean authenticaiton; 
-    static boolean integrity; 
 
-    static int optionsSelected;
-
+    String host;
     int port;
-    ServerSocket serverSocket;
 
     private static Socket socket;
 
-    public Server() throws java.io.IOException{
+    public Client() throws IOException {
+        host = "localhost";
         port = 8080;
-        serverSocket = new ServerSocket(port);
-        System.out.println("Server Started and listening to the port 8080");
+        InetAddress address = InetAddress.getByName(host);
+        socket = new Socket(address, port);
     }
 
-    public String checkInput() throws java.io.IOException{
-        socket = serverSocket.accept();
+    public void sendMessage(String message) throws IOException {
+        //Send the message to the server
+        OutputStream os = socket.getOutputStream();
+        OutputStreamWriter osw = new OutputStreamWriter(os);
+        BufferedWriter bw = new BufferedWriter(osw);
+
+        bw.write(message);
+        bw.flush();
+    }
+
+    public String getMessage() throws IOException {
+        //Get the return message from the server
         InputStream is = socket.getInputStream();
         InputStreamReader isr = new InputStreamReader(is);
         BufferedReader br = new BufferedReader(isr);
-
         String message = br.readLine();
         return message;
     }
 
-    public void sendOutput(String message) throws java.io.IOException{
-        OutputStream os = socket.getOutputStream();
-        OutputStreamWriter osw = new OutputStreamWriter(os);
-        BufferedWriter bw = new BufferedWriter(osw);
-       
-        bw.write(message);
-        System.out.println("Sending message: "+message);
-        bw.flush();
-    }
-
-    private static void optionsSelected(){
-        int temp = optionsSelected;
-
-        if(optionsSelected > 3){
-            confidentiality = true;
-            temp = optionsSelected - 4;
-        }else{
-            confidentiality = false;
-        }if(temp > 1){
-            integrity = true;
-            temp = temp - 2;
-        }else{
-            integrity = false; 
-        }
-        if(temp == 1){
-            authenticaiton = true;
-        }else{
-            authenticaiton = false; 
-        }
-    }
-
-    private static int getSecurity(){
+     private static int getSecurity(){
         Scanner scan = new Scanner(System.in);
         boolean input = false; 
 
@@ -114,38 +82,24 @@ public class Server
         return option;
     }
 
-    public static void main(String[] args)
+
+    public static void main(String args[])
     {
         try
         {
-            Server server = new Server();
-            optionsSelected = getSecurity();
-
-            optionsSelected();
-            System.out.println("Confidentiality: "+confidentiality );
-            System.out.println("Integrity: "+integrity);
-            System.out.println("Authentication: "+authenticaiton);
+            Client client = new Client();
+            int securityOptions = getSecurity();
 
 
-            while(true)
-            {
-                String message = server.checkInput();
-                System.out.println(message);
+            client.sendMessage(Integer.toString(securityOptions));
 
 
-                if(Integer.valueOf(message) == optionsSelected){
-                    System.out.println("Same security options have been selected"); 
-                }else{
-                    System.out.println("ERROR: Different security options have been selected"); 
-
-                }
 
 
-            }
         }
-        catch (Exception e)
+        catch (Exception exception)
         {
-            e.printStackTrace();
+            exception.printStackTrace();
         }
         finally
         {
@@ -153,7 +107,10 @@ public class Server
             {
                 socket.close();
             }
-            catch(Exception e){}
+            catch(Exception e)
+            {
+                e.printStackTrace();
+            }
         }
     }
 }
