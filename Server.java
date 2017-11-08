@@ -10,8 +10,8 @@ import java.util.Scanner;
 import javax.crypto.KeyGenerator; 
 import javax.crypto.Cipher;
 import java.util.Base64;
-
-
+import javax.crypto.*;
+import java.security.*;
 
 public class Server
 {

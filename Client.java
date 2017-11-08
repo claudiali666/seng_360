@@ -5,6 +5,9 @@ import java.util.Scanner;
 import java.util.Base64;
 import javax.crypto.KeyGenerator; 
 import javax.crypto.Cipher;
+import javax.crypto.*;
+import java.security.*;
+import javax.crypto.spec.SecretKeySpec;
 
 
 public class Client
@@ -116,6 +119,21 @@ public class Client
         data = new String(decryptedValue);
 
         return data;
+
+
+    }
+
+    private static byte[] generateMAC(String msg) throws Exception {
+        // create a MAC and initialize with the key
+        Mac mac  = Mac.getInstance("HmacSHA256");
+        SecretKeySpec key = generateKey();
+        mac.init(key);
+
+        byte[] b = msg.getBytes("UTF-8");
+
+        byte[] result = mac.doFinal(b);
+
+        return result;
 
 
     }
