@@ -4,10 +4,12 @@ import java.net.Socket;
 import java.util.Scanner;
 import java.util.Base64;
 import javax.crypto.KeyGenerator; 
-import javax.crypto.Cipher;
 import javax.crypto.*;
-import java.security.*;
 import javax.crypto.spec.SecretKeySpec;
+import java.security.*;
+import javax.crypto.spec.IvParameterSpec;
+
+
 
 
 public class Client
@@ -16,20 +18,26 @@ public class Client
     static final int INTEGRITY = 2;
     static final int AUTHENTICATION = 1;
 
+    static boolean confidentiality;
+    static boolean authenticaiton; 
+    static boolean integrity; 
+
+    static Scanner scanner;
+    static int optionsSelected;
+
 
     String host;
     int port;
 
-    static final byte[] key = new byte[] {'!', '-', 't', 'r'};
+
+    static final byte[] key = new byte[] {'!', '-', 't', 'r','!', '-', 't', 'r','!', '-', 't', 'r','!', '-', 't', 'r'};
 
 
     private static Socket socket;
 
     public Client() throws IOException {
-        host = "localhost";
         port = 8080;
-        InetAddress address = InetAddress.getByName(host);
-        socket = new Socket(address, port);
+        socket = new Socket("127.0.0.1", port);
     }
 
     public void sendMessage(String message) throws IOException {
@@ -43,10 +51,10 @@ public class Client
     }
 
     public String getMessage() throws IOException {
-        //Get the return message from the server
         InputStream is = socket.getInputStream();
         InputStreamReader isr = new InputStreamReader(is);
         BufferedReader br = new BufferedReader(isr);
+
         String message = br.readLine();
         return message;
     }
@@ -91,42 +99,65 @@ public class Client
         return option;
     }
 
-    private static SecretKeySpec generateKey() throws Exception{
+    private static void optionsSelected(){
+        int temp = optionsSelected;
+
+        if(optionsSelected > 3){
+            confidentiality = true;
+            temp = optionsSelected - 4;
+        }else{
+            confidentiality = false;
+        }if(temp > 1){
+            integrity = true;
+            temp = temp - 2;
+        }else{
+            integrity = false; 
+        }
+        if(temp == 1){
+            authenticaiton = true;
+        }else{
+            authenticaiton = false; 
+        }
+    }
+
+    private static Key generateKey() throws Exception{
        
-        SecretKeySpec skeySpec = new SecretKeySpec(key, "AES");
+        Key skeySpec = new SecretKeySpec(key, "AES");
         return skeySpec;
     }
 
-    private static String encrypt(String data) throws Exception{
-        SecretKeySpec key = generateKey();
+   public static String encrypt(String Data) throws Exception {
+        Key key = generateKey();
         Cipher c = Cipher.getInstance("AES");
-
         c.init(Cipher.ENCRYPT_MODE, key);
-        byte[] encodedValue = c.doFinal(data.getBytes());
-        String encryptedValue = Base64.getEncoder().encodeToString(encodedValue);
-
+        byte[] encVal = c.doFinal(Data.getBytes());
+        String encryptedValue = Base64.getEncoder().withoutPadding().encodeToString(encVal);
         return encryptedValue;
     }
 
-    private static String decrypt(String data) throws Exception {
-        SecretKeySpec key = generateKey();
+    public static String decrypt(String encryptedData) throws Exception {
+        Key key = generateKey();
         Cipher c = Cipher.getInstance("AES");
-
         c.init(Cipher.DECRYPT_MODE, key);
-        byte[] decoderVal = Base64.getDecoder().decode(data);
-        byte[] decryptedValue = c.doFinal(decoderVal);
-
-        data = new String(decryptedValue);
-
-        return data;
-
-
+        byte[] decordedValue = Base64.getDecoder().decode(encryptedData);
+        byte[] decValue = c.doFinal(decordedValue);
+        String decryptedValue = new String(decValue);
+        return decryptedValue;
     }
 
-    private static byte[] generateMAC(String msg) throws Exception {
-        // create a MAC and initialize with the key
+    private static String userInput(Scanner input){
+        String sendingMessage;
+        if(input.hasNext()){
+            sendingMessage = input.nextLine();
+            return sendingMessage;
+        }
+        return null;
+    }
+
+     private static byte[] generateMAC(String msg) throws Exception {
+    // create a MAC and initialize with the key
         Mac mac  = Mac.getInstance("HmacSHA256");
-        SecretKeySpec key = generateKey();
+        Key key = generateKey();
         mac.init(key);
 
         byte[] b = msg.getBytes("UTF-8");
@@ -143,14 +174,37 @@ public class Client
     {
         try
         {
+            Scanner input = new Scanner(System.in);
+            String message;
+            String sendingMessage;
+
             Client client = new Client();
-            int securityOptions = getSecurity();
+            optionsSelected = getSecurity();
+            optionsSelected();
 
-            client.sendMessage(Integer.toString(securityOptions));
+            client.sendMessage(Integer.toString(optionsSelected) +"\n");
+            message = client.getMessage();
+            System.out.println(message);
 
-            client.sendMessage(encrypt("this is a test"));
+            while(true){
+                message = client.getMessage();
+                if(message != null){
+                    if(confidentiality){
+                        System.out.println(decrypt(message));
+                    }else{
+                        System.out.println(message);
+                    }
+                } 
+                if(input.hasNext()){
+                    sendingMessage = input.nextLine();
+                    if(confidentiality){
+                        client.sendMessage(encrypt(sendingMessage) +"\n");
+                    }else{
+                        client.sendMessage(sendingMessage +"\n");
+                    }
+                }
 
-
+            }
 
         }
         catch (Exception exception)
