@@ -1,4 +1,3 @@
-
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.InputStream;
@@ -8,6 +7,10 @@ import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Scanner;
+import javax.crypto.KeyGenerator; 
+import javax.crypto.Cipher;
+import java.util.Base64;
+
 
 
 public class Server
@@ -24,6 +27,9 @@ public class Server
 
     int port;
     ServerSocket serverSocket;
+
+    static final byte[] key = new byte[] {'!', '-', 't', 'r'};
+
 
     private static Socket socket;
 
@@ -113,6 +119,46 @@ public class Server
         }
         return option;
     }
+    //Confidentiality - need to encrypt the messages sent over the network from the server and the client, symmetrically 
+    //and can assume that the public keys are already known 
+
+    private static SecretKeySpec generateKey() throws Exception{
+       
+        SecretKeySpec skeySpec = new SecretKeySpec(key, "AES");
+        return skeySpec;
+    }
+
+    private static String encrypt(String data) throws Exception{
+        SecretKeySpec key = generateKey();
+        Cipher c = Cipher.getInstance("AES");
+
+        c.init(Cipher.ENCRYPT_MODE, key);
+        byte[] encodedValue = c.doFinal(data.getBytes());
+        String encryptedValue = Base64.getEncoder().encodeToString(encodedValue);
+
+        return encryptedValue;
+    }
+
+    private static String decrypt(String data) throws Exception {
+        SecretKeySpec key = generateKey();
+        Cipher c = Cipher.getInstance("AES");
+
+        c.init(Cipher.DECRYPT_MODE, key);
+        byte[] decoderVal = Base64.getDecoder().decode(data);
+        byte[] decryptedValue = c.doFinal(decoderVal);
+
+        data = new String(decryptedValue);
+
+        return data;
+
+
+    }
+
+    //Integrity - need to ensure that the messages sent to and from the server are the same on both sides 
+
+    //Authenticaiton - need to ensure the identities of the client and server by using a username and password possibly 
+
+
 
     public static void main(String[] args)
     {
@@ -139,6 +185,8 @@ public class Server
                     System.out.println("ERROR: Different security options have been selected"); 
 
                 }
+                message = server.checkInput();
+                System.out.println(decrypt(message));
 
 
             }
