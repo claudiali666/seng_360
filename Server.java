@@ -12,7 +12,7 @@ import javax.crypto.Cipher;
 import java.util.Base64;
 import javax.crypto.*;
 import java.security.*;
-
+import javax.crypto.spec.SecretKeySpec;
 public class Server
 {
     static final int CONFIDENTIALITY = 4;
@@ -155,7 +155,20 @@ public class Server
     }
 
     //Integrity - need to ensure that the messages sent to and from the server are the same on both sides 
+    private static byte[] generateMAC(String msg) throws Exception {
+        // create a MAC and initialize with the key
+        Mac mac  = Mac.getInstance("HmacSHA256");
+        SecretKeySpec key = generateKey();
+        mac.init(key);
 
+        byte[] b = msg.getBytes("UTF-8");
+
+        byte[] result = mac.doFinal(b);
+
+        return result;
+
+
+    }
     //Authenticaiton - need to ensure the identities of the client and server by using a username and password possibly 
 
 
