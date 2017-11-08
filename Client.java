@@ -2,6 +2,9 @@ import java.io.*;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.util.Scanner;
+import java.util.Base64;
+import javax.crypto.KeyGenerator; 
+import javax.crypto.Cipher;
 
 
 public class Client
@@ -13,6 +16,9 @@ public class Client
 
     String host;
     int port;
+
+    static final byte[] key = new byte[] {'!', '-', 't', 'r'};
+
 
     private static Socket socket;
 
@@ -82,6 +88,38 @@ public class Client
         return option;
     }
 
+    private static SecretKeySpec generateKey() throws Exception{
+       
+        SecretKeySpec skeySpec = new SecretKeySpec(key, "AES");
+        return skeySpec;
+    }
+
+    private static String encrypt(String data) throws Exception{
+        SecretKeySpec key = generateKey();
+        Cipher c = Cipher.getInstance("AES");
+
+        c.init(Cipher.ENCRYPT_MODE, key);
+        byte[] encodedValue = c.doFinal(data.getBytes());
+        String encryptedValue = Base64.getEncoder().encodeToString(encodedValue);
+
+        return encryptedValue;
+    }
+
+    private static String decrypt(String data) throws Exception {
+        SecretKeySpec key = generateKey();
+        Cipher c = Cipher.getInstance("AES");
+
+        c.init(Cipher.DECRYPT_MODE, key);
+        byte[] decoderVal = Base64.getDecoder().decode(data);
+        byte[] decryptedValue = c.doFinal(decoderVal);
+
+        data = new String(decryptedValue);
+
+        return data;
+
+
+    }
+
 
     public static void main(String args[])
     {
@@ -90,9 +128,9 @@ public class Client
             Client client = new Client();
             int securityOptions = getSecurity();
 
-
             client.sendMessage(Integer.toString(securityOptions));
 
+            client.sendMessage(encrypt("this is a test"));
 
 
 
