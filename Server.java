@@ -13,6 +13,11 @@ import java.util.Base64;
 import javax.crypto.*;
 import java.security.*;
 import javax.crypto.spec.SecretKeySpec;
+import javax.crypto.spec.IvParameterSpec;
+
+
+
+
 public class Server
 {
     static final int CONFIDENTIALITY = 4;
@@ -26,9 +31,9 @@ public class Server
     static int optionsSelected;
 
     int port;
-    ServerSocket serverSocket;
+    static ServerSocket serverSocket;
 
-    static final byte[] key = new byte[] {'!', '-', 't', 'r'};
+    static final byte[] key = new byte[] {'!', '-', 't', 'r','!', '-', 't', 'r','!', '-', 't', 'r','!', '-', 't', 'r'};
 
 
     private static Socket socket;
@@ -40,12 +45,9 @@ public class Server
     }
 
     public String checkInput() throws java.io.IOException{
-        socket = serverSocket.accept();
-        InputStream is = socket.getInputStream();
-        InputStreamReader isr = new InputStreamReader(is);
-        BufferedReader br = new BufferedReader(isr);
+        Scanner scanner = new Scanner(socket.getInputStream());
+        String message = scanner.nextLine();
 
-        String message = br.readLine();
         return message;
     }
 
@@ -55,7 +57,6 @@ public class Server
         BufferedWriter bw = new BufferedWriter(osw);
        
         bw.write(message);
-        System.out.println("Sending message: "+message);
         bw.flush();
     }
 
@@ -122,43 +123,48 @@ public class Server
     //Confidentiality - need to encrypt the messages sent over the network from the server and the client, symmetrically 
     //and can assume that the public keys are already known 
 
-    private static SecretKeySpec generateKey() throws Exception{
-       
-        SecretKeySpec skeySpec = new SecretKeySpec(key, "AES");
+    private static Key generateKey() throws Exception{
+        Key skeySpec = new SecretKeySpec(key, "AES");
         return skeySpec;
     }
 
-    private static String encrypt(String data) throws Exception{
-        SecretKeySpec key = generateKey();
+    public static String encrypt(String data) throws Exception {
+        Key key = generateKey();
         Cipher c = Cipher.getInstance("AES");
-
         c.init(Cipher.ENCRYPT_MODE, key);
-        byte[] encodedValue = c.doFinal(data.getBytes());
-        String encryptedValue = Base64.getEncoder().encodeToString(encodedValue);
-
+        byte[] encVal = c.doFinal(data.getBytes());
+        String encryptedValue = Base64.getEncoder().withoutPadding().encodeToString(encVal);
         return encryptedValue;
     }
 
-    private static String decrypt(String data) throws Exception {
-        SecretKeySpec key = generateKey();
+    public static String decrypt(String encryptedData) throws Exception {
+        Key key = generateKey();
         Cipher c = Cipher.getInstance("AES");
+    
 
         c.init(Cipher.DECRYPT_MODE, key);
-        byte[] decoderVal = Base64.getDecoder().decode(data);
-        byte[] decryptedValue = c.doFinal(decoderVal);
+        byte[] decodedValue =  Base64.getDecoder().decode(encryptedData.getBytes());
+        byte[] decryptedVal = c.doFinal(decodedValue);
+        return new String(decryptedVal);
+    }
 
-        data = new String(decryptedValue);
-
-        return data;
-
-
+    private static String userInput(Scanner input){
+        String sendingMessage;
+        if(input.hasNext()){
+            sendingMessage = input.nextLine();
+            return sendingMessage;
+        }
+        return null;
     }
 
     //Integrity - need to ensure that the messages sent to and from the server are the same on both sides 
+
+    //Authenticaiton - need to ensure the identities of the client and server by using a username and password possibly 
+
     private static byte[] generateMAC(String msg) throws Exception {
-        // create a MAC and initialize with the key
+    // create a MAC and initialize with the key
         Mac mac  = Mac.getInstance("HmacSHA256");
-        SecretKeySpec key = generateKey();
+        Key key = generateKey();
         mac.init(key);
 
         byte[] b = msg.getBytes("UTF-8");
@@ -169,40 +175,60 @@ public class Server
 
 
     }
-    //Authenticaiton - need to ensure the identities of the client and server by using a username and password possibly 
-
-
 
     public static void main(String[] args)
     {
+        boolean first = true;
         try
         {
+            String message;
+            String sendingMessage;
+
+            Scanner input = new Scanner(System.in);
             Server server = new Server();
             optionsSelected = getSecurity();
 
+
             optionsSelected();
-            System.out.println("Confidentiality: "+confidentiality );
-            System.out.println("Integrity: "+integrity);
-            System.out.println("Authentication: "+authenticaiton);
+            socket = serverSocket.accept();
 
-
-            while(true)
-            {
-                String message = server.checkInput();
-                System.out.println(message);
-
-
-                if(Integer.valueOf(message) == optionsSelected){
-                    System.out.println("Same security options have been selected"); 
-                }else{
-                    System.out.println("ERROR: Different security options have been selected"); 
-
-                }
-                message = server.checkInput();
-                System.out.println(decrypt(message));
-
-
+            String clientOptionsSelected = null;
+            while(clientOptionsSelected == null){
+                clientOptionsSelected = server.checkInput();
             }
+
+            if(clientOptionsSelected.equals(String.valueOf(optionsSelected))){
+                server.sendOutput("security protocols accepted \n");
+
+                while(true){
+                    if(input.hasNext()){
+                        sendingMessage = input.nextLine();   
+                        if(confidentiality){
+                            server.sendOutput(encrypt(sendingMessage) +"\n");
+                        }else{
+                            server.sendOutput(sendingMessage +"\n");
+                        }
+                    }
+                    message = server.checkInput();
+                    if(message != null){
+                        if(confidentiality){
+                            System.out.println(decrypt(message));
+                        }
+                        else{
+                            System.out.println(message);
+                        }
+                    }
+                
+                }
+
+            }else{
+                System.out.println("ERROR: Server and Client security settings must be the same \n");
+                server.sendOutput("security protocols declined \n");
+
+                socket.close();
+            }
+
+           
         }
         catch (Exception e)
         {
