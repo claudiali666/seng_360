@@ -14,12 +14,14 @@ import javax.crypto.*;
 import java.security.*;
 import javax.crypto.spec.SecretKeySpec;
 import javax.crypto.spec.IvParameterSpec;
-
+import java.io.PrintStream;
+import java.io.*;
 
 
 
 public class Server
 {
+
     static final int CONFIDENTIALITY = 4;
     static final int INTEGRITY = 2;
     static final int AUTHENTICATION = 1;
@@ -37,6 +39,7 @@ public class Server
 
 
     private static Socket socket;
+
 
     public Server() throws java.io.IOException{
         port = 8080;
@@ -161,7 +164,7 @@ public class Server
 
     //Authenticaiton - need to ensure the identities of the client and server by using a username and password possibly 
 
-    private static byte[] generateMAC(String msg) throws Exception {
+    private static String generateMAC(String msg) throws Exception {
     // create a MAC and initialize with the key
         Mac mac  = Mac.getInstance("HmacSHA256");
         Key key = generateKey();
@@ -171,7 +174,7 @@ public class Server
 
         byte[] result = mac.doFinal(b);
 
-        return result;
+        return new String(result);
 
 
     }
@@ -184,10 +187,9 @@ public class Server
             String message;
             String sendingMessage;
 
-            Scanner input = new Scanner(System.in);
+            BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
             Server server = new Server();
             optionsSelected = getSecurity();
-
 
             optionsSelected();
             socket = serverSocket.accept();
@@ -201,24 +203,53 @@ public class Server
                 server.sendOutput("security protocols accepted \n");
 
                 while(true){
-                    if(input.hasNext()){
-                        sendingMessage = input.nextLine();   
+                    //User input
+                    if(input.ready()){
+                        sendingMessage = input.readLine();   
                         if(confidentiality){
-                            server.sendOutput(encrypt(sendingMessage) +"\n");
-                        }else{
+                            // send the encrypted input 
+                            server.sendOutput(server.encrypt(sendingMessage) +"\n");
+                        }if(integrity){
+                            //generate MAC
+                            String mac = server.generateMAC(sendingMessage);
+                            if(!confidentiality){
+                                //Send unencrypted message
+                                server.sendOutput(sendingMessage + "\n");
+                            }
+                            //send the mac
+                            server.sendOutput(mac +"\n");
+                        }
+                        else if(!confidentiality && !integrity) {
                             server.sendOutput(sendingMessage +"\n");
                         }
-                    }
-                    message = server.checkInput();
-                    if(message != null){
-                        if(confidentiality){
-                            System.out.println(decrypt(message));
+                    }  
+
+                    BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                    if(br.ready()){
+                        message = br.readLine();
+                        if(integrity){
+                            if(confidentiality){
+                                message = decrypt(message);
+                            }
+                            String mac = server.generateMAC(message);
+                            
+                            String sentMac = br.readLine();
+                            while(br.ready()){
+                                sentMac += "\n";
+                                sentMac += br.readLine();
+
+                            }
+                            if(mac.equals(sentMac)){
+                                System.out.println(message);
+                            }
+                        }else if(confidentiality){
+                                System.out.println(decrypt(message));
                         }
-                        else{
+                    
+                        else if(!integrity && !confidentiality){
                             System.out.println(message);
                         }
-                    }
-                
+                    }                 
                 }
 
             }else{
