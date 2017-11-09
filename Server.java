@@ -125,7 +125,24 @@ public class Server
     }
     //Confidentiality - need to encrypt the messages sent over the network from the server and the client, symmetrically 
     //and can assume that the public keys are already known 
+    private static KeyPair generateKeyPair(){
+        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("AES");
+        keyGen.initialize(128);
+        KeyPair keyPair = keyGen.genKeyPair();
+        //TO GET PRIVATE/PUBLIC key use following:
+        //PrivateKey privateKey = keyPair.getPrivate();
+        //PublicKey publicKey = keyPair.getPublic();
 
+        return keyPair;
+    }
+
+    private static String generateSessonKey(){
+        KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+        keyGen.init(256);
+        SecretKey key = keyGen.generateKey();
+        byte[] symmKey = key.getEncoded();
+        return symmKey;
+    }
     private static Key generateKey() throws Exception{
         Key skeySpec = new SecretKeySpec(key, "AES");
         return skeySpec;
