@@ -2,6 +2,14 @@ import java.io.*;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.util.Scanner;
+import java.util.Base64;
+import javax.crypto.KeyGenerator; 
+import javax.crypto.*;
+import javax.crypto.spec.SecretKeySpec;
+import java.security.*;
+import javax.crypto.spec.IvParameterSpec;
+
+
 
 
 public class Client
@@ -10,17 +18,25 @@ public class Client
     static final int INTEGRITY = 2;
     static final int AUTHENTICATION = 1;
 
+    static boolean confidentiality;
+    static boolean authenticaiton; 
+    static boolean integrity; 
+
+    static Scanner scanner;
+    static int optionsSelected;
+
 
     String host;
     int port;
 
+
+    static final byte[] key = new byte[] {'!', '-', 't', 'r','!', '-', 't', 'r','!', '-', 't', 'r','!', '-', 't', 'r'};
+
     private static Socket socket;
 
     public Client() throws IOException {
-        host = "localhost";
         port = 8080;
-        InetAddress address = InetAddress.getByName(host);
-        socket = new Socket(address, port);
+        socket = new Socket("127.0.0.1", port);
     }
 
     public void sendMessage(String message) throws IOException {
@@ -34,10 +50,10 @@ public class Client
     }
 
     public String getMessage() throws IOException {
-        //Get the return message from the server
         InputStream is = socket.getInputStream();
         InputStreamReader isr = new InputStreamReader(is);
         BufferedReader br = new BufferedReader(isr);
+
         String message = br.readLine();
         return message;
     }
@@ -82,19 +98,142 @@ public class Client
         return option;
     }
 
+    private static void optionsSelected(){
+        int temp = optionsSelected;
+
+        if(optionsSelected > 3){
+            confidentiality = true;
+            temp = optionsSelected - 4;
+        }else{
+            confidentiality = false;
+        }if(temp > 1){
+            integrity = true;
+            temp = temp - 2;
+        }else{
+            integrity = false; 
+        }
+        if(temp == 1){
+            authenticaiton = true;
+        }else{
+            authenticaiton = false; 
+        }
+    }
+
+    private static Key generateKey() throws Exception{
+       
+        Key skeySpec = new SecretKeySpec(key, "AES");
+        return skeySpec;
+    }
+
+   public static String encrypt(String Data) throws Exception {
+        Key key = generateKey();
+        Cipher c = Cipher.getInstance("AES");
+        c.init(Cipher.ENCRYPT_MODE, key);
+        byte[] encVal = c.doFinal(Data.getBytes());
+        String encryptedValue = Base64.getEncoder().withoutPadding().encodeToString(encVal);
+        return encryptedValue;
+    }
+
+    public static String decrypt(String encryptedData) throws Exception {
+        Key key = generateKey();
+        Cipher c = Cipher.getInstance("AES");
+        c.init(Cipher.DECRYPT_MODE, key);
+        byte[] decordedValue = Base64.getDecoder().decode(encryptedData);
+        byte[] decValue = c.doFinal(decordedValue);
+        String decryptedValue = new String(decValue);
+        return decryptedValue;
+    }
+
+    private static String userInput(Scanner input){
+        String sendingMessage;
+        if(input.hasNext()){
+            sendingMessage = input.nextLine();
+            return sendingMessage;
+        }
+        return null;
+    }
+
+     private static String generateMAC(String msg) throws Exception {
+    // create a MAC and initialize with the key
+        Mac mac  = Mac.getInstance("HmacSHA256");
+        Key key = generateKey();
+        mac.init(key);
+
+        byte[] b = msg.getBytes("UTF-8");
+
+        byte[] result = mac.doFinal(b);
+
+        return new String(result);
+
+
+    }
+
 
     public static void main(String args[])
     {
         try
         {
+            BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
+            String message;
+            String sendingMessage;
+
             Client client = new Client();
-            int securityOptions = getSecurity();
+            optionsSelected = getSecurity();
+            optionsSelected();
 
+            client.sendMessage(Integer.toString(optionsSelected) +"\n");
+            message = client.getMessage();
+            System.out.println(message);
 
-            client.sendMessage(Integer.toString(securityOptions));
+            while(true){
+                
+                if(input.ready()){
+                    sendingMessage = input.readLine();   
+                    if(confidentiality){
+                        client.sendMessage(client.encrypt(sendingMessage) +"\n");
+                    }if(integrity){
+                        String mac = generateMAC(sendingMessage);
+                        if(!confidentiality){
+                            client.sendMessage(sendingMessage + "\n");
+                        }
+                        client.sendMessage(mac +"\n");
+                    }
+                    else if(!integrity && !confidentiality){
+                        client.sendMessage(sendingMessage +"\n");
+                    }
+                }  
 
+                BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                boolean macMatch = false;
+                if(br.ready()){
+                    message = br.readLine();
+                    if(integrity){
+                        if(confidentiality){
+                            message = decrypt(message);
 
+                        }
+                        String mac = generateMAC(message);
+                        String sentMac = br.readLine();
+                        while(br.ready()){
+                            sentMac += "\n";
+                            sentMac += br.readLine();
 
+                        }                        
+                        if(mac.equals(sentMac)){
+                            System.out.println(message);
+                        }
+                    }
+                    else if(confidentiality){
+                        System.out.println(decrypt(message));
+                    }
+
+                
+                    else if(!integrity && !confidentiality){
+                        System.out.println(message);
+                    }
+                }
+
+            }
 
         }
         catch (Exception exception)
