@@ -32,7 +32,6 @@ public class Client
 
     static final byte[] key = new byte[] {'!', '-', 't', 'r','!', '-', 't', 'r','!', '-', 't', 'r','!', '-', 't', 'r'};
 
-
     private static Socket socket;
 
     public Client() throws IOException {
@@ -154,7 +153,7 @@ public class Client
         return null;
     }
 
-     private static byte[] generateMAC(String msg) throws Exception {
+     private static String generateMAC(String msg) throws Exception {
     // create a MAC and initialize with the key
         Mac mac  = Mac.getInstance("HmacSHA256");
         Key key = generateKey();
@@ -164,7 +163,7 @@ public class Client
 
         byte[] result = mac.doFinal(b);
 
-        return result;
+        return new String(result);
 
 
     }
@@ -174,7 +173,7 @@ public class Client
     {
         try
         {
-            Scanner input = new Scanner(System.in);
+            BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
             String message;
             String sendingMessage;
 
@@ -187,20 +186,50 @@ public class Client
             System.out.println(message);
 
             while(true){
-                message = client.getMessage();
-                if(message != null){
+                
+                if(input.ready()){
+                    sendingMessage = input.readLine();   
                     if(confidentiality){
-                        System.out.println(decrypt(message));
-                    }else{
-                        System.out.println(message);
+                        client.sendMessage(client.encrypt(sendingMessage) +"\n");
+                    }if(integrity){
+                        String mac = generateMAC(sendingMessage);
+                        if(!confidentiality){
+                            client.sendMessage(sendingMessage + "\n");
+                        }
+                        client.sendMessage(mac +"\n");
                     }
-                } 
-                if(input.hasNext()){
-                    sendingMessage = input.nextLine();
-                    if(confidentiality){
-                        client.sendMessage(encrypt(sendingMessage) +"\n");
-                    }else{
+                    else if(!integrity && !confidentiality){
                         client.sendMessage(sendingMessage +"\n");
+                    }
+                }  
+
+                BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                boolean macMatch = false;
+                if(br.ready()){
+                    message = br.readLine();
+                    if(integrity){
+                        if(confidentiality){
+                            message = decrypt(message);
+
+                        }
+                        String mac = generateMAC(message);
+                        String sentMac = br.readLine();
+                        while(br.ready()){
+                            sentMac += "\n";
+                            sentMac += br.readLine();
+
+                        }                        
+                        if(mac.equals(sentMac)){
+                            System.out.println(message);
+                        }
+                    }
+                    else if(confidentiality){
+                        System.out.println(decrypt(message));
+                    }
+
+                
+                    else if(!integrity && !confidentiality){
+                        System.out.println(message);
                     }
                 }
 
