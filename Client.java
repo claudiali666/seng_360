@@ -8,6 +8,11 @@ import javax.crypto.*;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.*;
 import javax.crypto.spec.IvParameterSpec;
+import java.security.spec.X509EncodedKeySpec;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.nio.file.*;
+import java.nio.charset.StandardCharsets;
+import java.security.spec.InvalidKeySpecException;
 
 
 
@@ -25,12 +30,19 @@ public class Client
     static Scanner scanner;
     static int optionsSelected;
 
+    static KeyPair keyPair;
+    static PublicKey serverPublicKey;
+    static PublicKey publicKeyClient;
+    static PrivateKey privateKey;
+
+    static SecretKey sessionKey;
+
 
     String host;
     int port;
 
 
-    static final byte[] key = new byte[] {'!', '-', 't', 'r','!', '-', 't', 'r','!', '-', 't', 'r','!', '-', 't', 'r'};
+    static final byte[] publicKey = new byte[] {'!', '-', 't', 'r','!', '-', 't', 'r','!', '-', 't', 'r','!', '-', 't', 'r'};
 
     private static Socket socket;
 
@@ -119,29 +131,54 @@ public class Client
         }
     }
 
-    private static Key generateKey() throws Exception{
+    private static SecretKey generateSessionKey() throws Exception{
+        KeyGenerator keygen = KeyGenerator.getInstance("AES"); // key generator to be used with AES algorithm.
+        keygen.init(256); // Key size is specified here.
+        byte[] key = keygen.generateKey().getEncoded();
        
-        Key skeySpec = new SecretKeySpec(key, "AES");
+        SecretKey skeySpec = new SecretKeySpec(key, "AES");
         return skeySpec;
     }
 
-   public static String encrypt(String Data) throws Exception {
-        Key key = generateKey();
-        Cipher c = Cipher.getInstance("AES");
-        c.init(Cipher.ENCRYPT_MODE, key);
-        byte[] encVal = c.doFinal(Data.getBytes());
+
+   public static String encrypt(byte[] data) throws Exception {
+        //Key key = generateKey();
+
+        Cipher c = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+        c.init(Cipher.ENCRYPT_MODE, serverPublicKey);
+        byte[] encVal = c.doFinal(data);
         String encryptedValue = Base64.getEncoder().withoutPadding().encodeToString(encVal);
+
         return encryptedValue;
     }
 
+
+
     public static String decrypt(String encryptedData) throws Exception {
-        Key key = generateKey();
+        //Key key = generateKey();
         Cipher c = Cipher.getInstance("AES");
-        c.init(Cipher.DECRYPT_MODE, key);
+        c.init(Cipher.DECRYPT_MODE, sessionKey);
         byte[] decordedValue = Base64.getDecoder().decode(encryptedData);
         byte[] decValue = c.doFinal(decordedValue);
         String decryptedValue = new String(decValue);
         return decryptedValue;
+    }
+
+    public static String encrypt(String data, Key key) throws Exception {
+        Cipher c = Cipher.getInstance("AES");
+        c.init(Cipher.ENCRYPT_MODE, key);
+        byte[] encVal = c.doFinal(data.getBytes());
+        String encryptedValue = Base64.getEncoder().withoutPadding().encodeToString(encVal);
+        return encryptedValue;
+    }
+    public static String decrypt(String encryptedData, Key key) throws Exception {
+        Cipher c = Cipher.getInstance("AES");
+
+        c.init(Cipher.DECRYPT_MODE, key);
+        byte[] decodedValue =  Base64.getDecoder().decode(encryptedData.getBytes());
+        byte[] decryptedVal = c.doFinal(decodedValue);
+
+        return new String(decryptedVal, "UTF-8");
     }
 
     private static String userInput(Scanner input){
@@ -156,24 +193,53 @@ public class Client
      private static String generateMAC(String msg) throws Exception {
     // create a MAC and initialize with the key
         Mac mac  = Mac.getInstance("HmacSHA256");
-        Key key = generateKey();
-        mac.init(key);
+        //Key key = generateKey();
+        mac.init(sessionKey);
 
         byte[] b = msg.getBytes("UTF-8");
 
         byte[] result = mac.doFinal(b);
 
         return new String(result);
-
-
     }
 
+    public static void genKeys() throws Exception{
+        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+        keyGen.initialize(512);
+        KeyPair keypair = keyGen.genKeyPair();
+        privateKey = keypair.getPrivate();
+        publicKeyClient = keypair.getPublic();
+    }
+
+    private static PublicKey recievePubicKey() {
+        File pk = new File("public_key.ser");
+        while (pk.length() == 0) {
+            // here we just wait
+        }
+        System.out.println("File Found...");
+        try {
+            FileInputStream f_in = new FileInputStream("public_key.ser");
+            ObjectInputStream obj_in = new ObjectInputStream(f_in);
+            PublicKey publicKey_Client = (PublicKey) obj_in.readObject();
+            obj_in.close();
+            pk.delete();
+            return publicKey_Client;
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.out.println("Error: IOException...");
+            return null;
+        } catch (ClassNotFoundException e) {
+            System.out.println("Error: Class not found exception...");
+            return null;
+        }
+     }
 
     public static void main(String args[])
     {
         try
         {
             BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
+
             String message;
             String sendingMessage;
 
@@ -185,12 +251,36 @@ public class Client
             message = client.getMessage();
             System.out.println(message);
 
+            if(confidentiality || integrity){
+                /* Sending the session key to the server.. needs fix */ 
+                //receive the server's public key
+                //serverPublicKey = recievePubicKey();
+                ObjectInputStream objIn = new ObjectInputStream(client.socket.getInputStream());
+                serverPublicKey = (PublicKey) objIn.readObject();
+
+                //generate a session key
+                sessionKey = generateSessionKey();
+
+                //encrypt the session key with server's public key
+                String encryptedSessionKey = encrypt(sessionKey.getEncoded());
+                System.out.println("DECRYPTED SESSION KEY: "+sessionKey.getEncoded());
+                System.out.println("ENCRYPTED SESSION KEY: "+encryptedSessionKey);
+
+                //send the encrypted session key to the server
+                ObjectOutputStream objOut = new ObjectOutputStream(socket.getOutputStream());
+                objOut.writeObject(encryptedSessionKey);
+                objOut.close();
+
+            
+            }
+            BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
             while(true){
                 
                 if(input.ready()){
                     sendingMessage = input.readLine();   
                     if(confidentiality){
-                        client.sendMessage(client.encrypt(sendingMessage) +"\n");
+                        client.sendMessage(client.encrypt(sendingMessage, sessionKey) +"\n");
                     }if(integrity){
                         String mac = generateMAC(sendingMessage);
                         if(!confidentiality){
@@ -203,8 +293,6 @@ public class Client
                     }
                 }  
 
-                BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                boolean macMatch = false;
                 if(br.ready()){
                     message = br.readLine();
                     if(integrity){
