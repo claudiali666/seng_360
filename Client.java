@@ -291,7 +291,8 @@ public class Client
         }
         catch (Exception exception)
         {
-            exception.printStackTrace();
+            //exception.printStackTrace();
+            System.out.println("ERROR: Connection Declined");
         }
         finally
         {
