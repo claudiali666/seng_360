@@ -231,10 +231,7 @@ public class Client
                 String username = fileScanner.nextLine();
                 if(username.equals(un)){
                     String password = fileScanner.nextLine();
-                    System.out.println("in the file: "+password);
                     if(password.equals(hashPw(pw))){
-                        //sign in as un
-                        System.out.println("sign in!");
                         found = true;
                     }
                 }
@@ -258,7 +255,23 @@ public class Client
         }
     return new String(hexChars);
 }
-
+    public static PrivateKey LoadPrivateKey()
+            throws IOException, NoSuchAlgorithmException,
+            InvalidKeySpecException {
+        // Read Private Key.
+        File filePrivateKey = new File( "cprivate.key");
+        FileInputStream fis = new FileInputStream("cprivate.key");
+        byte[] encodedPrivateKey = new byte[(int) filePrivateKey.length()];
+        fis.read(encodedPrivateKey);
+        fis.close();
+ 
+        KeyFactory keyFactory = KeyFactory.getInstance(ALGORITHM);
+        PKCS8EncodedKeySpec privateKeySpec = new PKCS8EncodedKeySpec(
+                encodedPrivateKey);
+        PrivateKey privateKey = keyFactory.generatePrivate(privateKeySpec);
+ 
+        return privateKey;
+    }
     public static void main(String args[])
     {
         try
@@ -278,12 +291,12 @@ public class Client
 
             if(confidentiality || integrity){
                     //generate servers public/private keys
-                    keyPair = generateKeyPair();
-                    privateKey = keyPair.getPrivate();
-                    publicKeyClient = keyPair.getPublic();
+                   
+                    privateKey = LoadPrivateKey();
+                    //publicKeyClient = keyPair.getPublic();
                     
-                    ObjectOutputStream objOut = new ObjectOutputStream(socket.getOutputStream());
-                    objOut.writeObject(publicKeyClient);
+                    // ObjectOutputStream objOut = new ObjectOutputStream(socket.getOutputStream());
+                    // objOut.writeObject(publicKeyClient);
 
                     ObjectInputStream objIn = new ObjectInputStream(socket.getInputStream());
                     byte[] encryptedSessionKey = (byte[]) objIn.readObject();
@@ -298,7 +311,7 @@ public class Client
                 while(true){
                     Scanner reader = new Scanner(System.in);  // Reading from System.in
                     System.out.println("Enter a username: ");
-                    Systemtring username = reader.nextLine(); // Scans the next line of the input as an string.
+                    String username = reader.nextLine(); // Scans the next line of the input as an string.
                     System.out.println("Enter a password: ");
                     String password = reader.nextLine(); // Scans the next token of the input as an int.
                     if(compare(username,password) == true){

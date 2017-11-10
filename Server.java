@@ -234,10 +234,7 @@ public class Server
                 String username = fileScanner.nextLine();
                 if(username.equals(un)){
                     String password = fileScanner.nextLine();
-                    System.out.println("in the file: "+password);
                     if(password.equals(hashPw(pw))){
-                        //sign in as un
-                        System.out.println("sign in!");
                         found = true;
                     }
                 }
@@ -261,7 +258,25 @@ public class Server
         }
     return new String(hexChars);
 }
+ public static PublicKey LoadPublicKey()
+            throws IOException, NoSuchAlgorithmException,
+            InvalidKeySpecException {
+        String algorithm = "RSA";
+        // Read Public Key.
+        File filePublicKey = new File( "cpublic.key");
+        FileInputStream fis = new FileInputStream( "cpublic.key");
+        byte[] encodedPublicKey = new byte[(int) filePublicKey.length()];
+        fis.read(encodedPublicKey);
+        fis.close();
+ 
+        // Generate KeyPair.
+        KeyFactory keyFactory = KeyFactory.getInstance(ALGORITHM);
+        X509EncodedKeySpec publicKeySpec = new X509EncodedKeySpec(
+                encodedPublicKey);
+        PublicKey publicKey = keyFactory.generatePublic(publicKeySpec);
 
+        return publicKey;
+    }
     public static void main(String[] args)
     {
         boolean first = true;
@@ -288,8 +303,8 @@ public class Server
                 server.sendOutput("security protocols accepted \n");
 
                 if(confidentiality || integrity){
-                    ObjectInputStream objIn = new ObjectInputStream(server.socket.getInputStream());
-                    publicKeyClient = (PublicKey) objIn.readObject();
+                    //ObjectInputStream objIn = new ObjectInputStream(server.socket.getInputStream());
+                    publicKeyClient = LoadPublicKey();
 
                     //generate a session key
                     sessionKey = generateSessionKey();
@@ -305,7 +320,7 @@ public class Server
                     while(true){
                         Scanner reader = new Scanner(System.in);  // Reading from System.in
                         System.out.println("Enter a username: ");
-                        Systemtring username = reader.nextLine(); // Scans the next line of the input as an string.
+                        String username = reader.nextLine(); // Scans the next line of the input as an string.
                         System.out.println("Enter a password: ");
                         String password = reader.nextLine(); // Scans the next token of the input as an int.
                         if(compare(username,password) == true){
@@ -356,6 +371,8 @@ public class Server
                             }
                             if(mac.equals(sentMac)){
                                 System.out.println(message);
+                            }else{
+                                System.out.println("message is altered");
                             }
                         }else if(confidentiality){
                                 System.out.println(decrypt(message, sessionKey));
