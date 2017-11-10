@@ -1,21 +1,13 @@
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.net.ServerSocket;
+import java.io.*;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.util.Scanner;
-import javax.crypto.KeyGenerator; 
-import javax.crypto.Cipher;
 import java.util.Base64;
+import javax.crypto.KeyGenerator; 
 import javax.crypto.*;
-import java.security.*;
 import javax.crypto.spec.SecretKeySpec;
+import java.security.*;
 import javax.crypto.spec.IvParameterSpec;
-import java.io.PrintStream;
-import java.io.*;
 import java.security.spec.X509EncodedKeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.nio.file.*;
@@ -23,10 +15,13 @@ import java.nio.charset.StandardCharsets;
 import java.security.spec.InvalidKeySpecException;
 
 
-public class Server
-{
 
+
+public class Client
+{
     static final String ALGORITHM = "RSA";
+
+
     static final int CONFIDENTIALITY = 4;
     static final int INTEGRITY = 2;
     static final int AUTHENTICATION = 1;
@@ -35,68 +30,50 @@ public class Server
     static boolean authenticaiton; 
     static boolean integrity; 
 
+    static Scanner scanner;
     static int optionsSelected;
-    static SecretKey sessionKey; 
 
-    static PublicKey publicKeyServer;
-    static PrivateKey privateKey;
+    static KeyPair keyPair;
+    static PublicKey serverPublicKey;
     static PublicKey publicKeyClient;
+    static PrivateKey privateKey;
 
-    static KeyPair keyPair;   
+    static SecretKey sessionKey;
 
+
+    String host;
     int port;
-    static ServerSocket serverSocket;
 
-    static final byte[] key = new byte[] {'!', '-', 't', 'r','!', '-', 't', 'r','!', '-', 't', 'r','!', '-', 't', 'r'};
 
+    static final byte[] publicKey = new byte[] {'!', '-', 't', 'r','!', '-', 't', 'r','!', '-', 't', 'r','!', '-', 't', 'r'};
 
     private static Socket socket;
 
-
-    public Server() throws java.io.IOException{
+    public Client() throws IOException {
         port = 8080;
-        serverSocket = new ServerSocket(port);
-        System.out.println("Server Started and listening to the port 8080");
+        socket = new Socket("127.0.0.1", port);
     }
 
-    public String checkInput() throws java.io.IOException{
-        Scanner scanner = new Scanner(socket.getInputStream());
-        String message = scanner.nextLine();
-
-        return message;
-    }
-
-    public void sendOutput(String message) throws java.io.IOException{
+    public void sendMessage(String message) throws IOException {
+        //Send the message to the server
         OutputStream os = socket.getOutputStream();
         OutputStreamWriter osw = new OutputStreamWriter(os);
         BufferedWriter bw = new BufferedWriter(osw);
-       
+
         bw.write(message);
         bw.flush();
     }
 
-    private static void optionsSelected(){
-        int temp = optionsSelected;
+    public String getMessage() throws IOException {
+        InputStream is = socket.getInputStream();
+        InputStreamReader isr = new InputStreamReader(is);
+        BufferedReader br = new BufferedReader(isr);
 
-        if(optionsSelected > 3){
-            confidentiality = true;
-            temp = optionsSelected - 4;
-        }else{
-            confidentiality = false;
-        }if(temp > 1){
-            integrity = true;
-            temp = temp - 2;
-        }else{
-            integrity = false; 
-        }
-        if(temp == 1){
-            authenticaiton = true;
-        }else{
-            authenticaiton = false; 
-        }
+        String message = br.readLine();
+        return message;
     }
 
-    private static int getSecurity(){
+     private static int getSecurity(){
         Scanner scan = new Scanner(System.in);
         boolean input = false; 
 
@@ -136,44 +113,61 @@ public class Server
         return option;
     }
 
+    private static void optionsSelected(){
+        int temp = optionsSelected;
 
-    public static byte[] encrypt(byte[] publicKey, byte[] inputData) throws Exception {
+        if(optionsSelected > 3){
+            confidentiality = true;
+            temp = optionsSelected - 4;
+        }else{
+            confidentiality = false;
+        }if(temp > 1){
+            integrity = true;
+            temp = temp - 2;
+        }else{
+            integrity = false; 
+        }
+        if(temp == 1){
+            authenticaiton = true;
+        }else{
+            authenticaiton = false; 
+        }
+    }
 
-        PublicKey key = KeyFactory.getInstance(ALGORITHM)
-                .generatePublic(new X509EncodedKeySpec(publicKey));
+    private static SecretKey generateSessionKey() throws Exception{
+        KeyGenerator keygen = KeyGenerator.getInstance("AES"); 
+        // key generator to be used with AES algorithm.
+        keygen.init(256); // Key size is specified here.
+        byte[] key = keygen.generateKey().getEncoded();
+       
+        SecretKey skeySpec = new SecretKeySpec(key, "AES");
+        return skeySpec;
+    }
+
+
+   public static byte[] encrypt(byte[] publicKey, byte[] inputData) throws Exception {
+
+        PublicKey key = KeyFactory.getInstance(ALGORITHM).generatePublic(new X509EncodedKeySpec(publicKey));
 
         Cipher cipher = Cipher.getInstance(ALGORITHM);
-        cipher.init(Cipher.PUBLIC_KEY, key);
+        cipher.init(Cipher.PUBLIC_KEY, serverPublicKey);
+        System.out.println("SESSION KEY: "+ new String(inputData));
 
         byte[] encryptedBytes = cipher.doFinal(inputData);
 
         return encryptedBytes;
     }
 
-    public static byte[] decrypt(byte[] privateKey, byte[] inputData) throws Exception {
-
-        PrivateKey key = KeyFactory.getInstance(ALGORITHM).generatePrivate(new PKCS8EncodedKeySpec(privateKey));
-
-        Cipher cipher = Cipher.getInstance(ALGORITHM);
-        cipher.init(Cipher.PRIVATE_KEY, key);
-        byte[] decryptedBytes = cipher.doFinal(inputData);
-
-        return decryptedBytes;
+    public static String decrypt(String encryptedData) throws Exception {
+        //Key key = generateKey();
+        Cipher c = Cipher.getInstance("AES");
+        c.init(Cipher.DECRYPT_MODE, sessionKey);
+        byte[] decordedValue = Base64.getDecoder().decode(encryptedData);
+        byte[] decValue = c.doFinal(decordedValue);
+        String decryptedValue = new String(decValue);
+        return decryptedValue;
     }
 
-    public static KeyPair generateKeyPair() throws NoSuchAlgorithmException, NoSuchProviderException {
-
-        KeyPairGenerator keyGen = KeyPairGenerator.getInstance(ALGORITHM);
-        SecureRandom random = SecureRandom.getInstance("SHA1PRNG", "SUN");
-
-        // 512 is keysize
-        keyGen.initialize(512, random);
-
-        KeyPair generateKeyPair = keyGen.generateKeyPair();
-        return generateKeyPair;
-    }
-
-  
     public static String encrypt(String data, Key key) throws Exception {
         Cipher c = Cipher.getInstance("AES");
         c.init(Cipher.ENCRYPT_MODE, key);
@@ -199,17 +193,18 @@ public class Server
         }
         return null;
     }
-    private static String generateMAC(String msg) throws Exception {
+
+     private static String generateMAC(String msg) throws Exception {
     // create a MAC and initialize with the key
         Mac mac  = Mac.getInstance("HmacSHA256");
+        //Key key = generateKey();
         mac.init(sessionKey);
 
         byte[] b = msg.getBytes("UTF-8");
+
         byte[] result = mac.doFinal(b);
 
         return new String(result);
-
-
     }
 
     public static void genKeys() throws Exception{
@@ -217,127 +212,122 @@ public class Server
         keyGen.initialize(512);
         KeyPair keypair = keyGen.genKeyPair();
         privateKey = keypair.getPrivate();
-        publicKeyServer = keypair.getPublic();
+        publicKeyClient = keypair.getPublic();
     }
 
+    private static PublicKey recievePubicKey() {
+        File pk = new File("public_key.ser");
+        while (pk.length() == 0) {
+            // here we just wait
+        }
+        System.out.println("File Found...");
+        try {
+            FileInputStream f_in = new FileInputStream("public_key.ser");
+            ObjectInputStream obj_in = new ObjectInputStream(f_in);
+            PublicKey publicKey_Client = (PublicKey) obj_in.readObject();
+            obj_in.close();
+            pk.delete();
+            return publicKey_Client;
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.out.println("Error: IOException...");
+            return null;
+        } catch (ClassNotFoundException e) {
+            System.out.println("Error: Class not found exception...");
+            return null;
+        }
+     }
 
-    private static SecretKey generateSessionKey(byte[] key) throws Exception{
-        KeyGenerator keygen = KeyGenerator.getInstance("AES"); // key generator to be used with AES algorithm.
-        keygen.init(256); // Key size is specified here.
-       
-        SecretKey skeySpec = new SecretKeySpec(key, "AES");
-        return skeySpec;
-    }
-
-    public static void main(String[] args)
+    public static void main(String args[])
     {
-        boolean first = true;
         try
         {
+            BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
+
             String message;
             String sendingMessage;
 
-            BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
-            Server server = new Server();
+            Client client = new Client();
             optionsSelected = getSecurity();
-
             optionsSelected();
-            while(true){
+
+            client.sendMessage(Integer.toString(optionsSelected) +"\n");
+            message = client.getMessage();
+            System.out.println(message);
+
+            if(confidentiality || integrity){
+                /* Sending the session key to the server.. needs fix */ 
+                //receive the server's public key
+                //serverPublicKey = recievePubicKey();
+                ObjectInputStream objIn = new ObjectInputStream(client.socket.getInputStream());
+                serverPublicKey = (PublicKey) objIn.readObject();
+
+                //generate a session key
+                sessionKey = generateSessionKey();
+
+                //encrypt the session key with server's public key
+                byte[] encryptedSessionKey = encrypt(serverPublicKey.getEncoded(), sessionKey.getEncoded());
+
+                //send the encrypted session key to the server
+                ObjectOutputStream objOut = new ObjectOutputStream(socket.getOutputStream());
+                objOut.writeObject(encryptedSessionKey);
+
             
-            socket = serverSocket.accept();
-
-            String clientOptionsSelected = null;
-            while(clientOptionsSelected == null){
-                clientOptionsSelected = server.checkInput();
             }
+            BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-            if(clientOptionsSelected.equals(String.valueOf(optionsSelected))){
-                server.sendOutput("security protocols accepted \n");
+            while(true){
+                
+                if(input.ready()){
+                    sendingMessage = input.readLine();   
+                    if(confidentiality){
+                        client.sendMessage(client.encrypt(sendingMessage, sessionKey) +"\n");
+                    }if(integrity){
+                        String mac = generateMAC(sendingMessage);
+                        if(!confidentiality){
+                            client.sendMessage(sendingMessage + "\n");
+                        }
+                        client.sendMessage(mac +"\n");
+                    }
+                    else if(!integrity && !confidentiality){
+                        client.sendMessage(sendingMessage +"\n");
+                    }
+                }  
 
-                if(confidentiality || integrity){
-                    /* Receive the session key from the client... needs fix */
-
-                    //generate servers public/private keys
-                    keyPair = generateKeyPair();
-                    privateKey = keyPair.getPrivate();
-                    publicKeyServer = keyPair.getPublic();
-                    
-                    ObjectOutputStream objOut = new ObjectOutputStream(socket.getOutputStream());
-                    objOut.writeObject(publicKeyServer);
-
-                    ObjectInputStream objIn = new ObjectInputStream(socket.getInputStream());
-                    byte[] encryptedSessionKey = (byte[]) objIn.readObject();
-
-                    //decrypt the session key with private key
-                    byte[] decryptedSessionKey = decrypt(privateKey.getEncoded(), encryptedSessionKey);
-
-                    //generate the session key between client and server
-                    sessionKey = generateSessionKey(decryptedSessionKey);
-                    System.out.println(new String(sessionKey.getEncoded()));
-                }
-
-                while(true){
-                    //User input
-                    if(input.ready()){
-                        sendingMessage = input.readLine();   
+                if(br.ready()){
+                    message = br.readLine();
+                    if(integrity){
                         if(confidentiality){
-                            // send the encrypted input 
-                            server.sendOutput(server.encrypt(sendingMessage, sessionKey) +"\n");
-                        }if(integrity){
-                            //generate MAC
-                            String mac = server.generateMAC(sendingMessage);
-                            if(!confidentiality){
-                                //Send unencrypted message
-                                server.sendOutput(sendingMessage + "\n");
-                            }
-                            //send the mac
-                            server.sendOutput(mac +"\n");
-                        }
-                        else if(!confidentiality && !integrity) {
-                            server.sendOutput(sendingMessage +"\n");
-                        }
-                    }  
+                            message = decrypt(message);
 
-                    BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                    if(br.ready()){
-                        message = br.readLine();
-                        if(integrity){
-                            if(confidentiality){
-                                message = decrypt(message, sessionKey);
-                            }
-                            String mac = server.generateMAC(message);
-                            
-                            String sentMac = br.readLine();
-                            while(br.ready()){
-                                sentMac += "\n";
-                                sentMac += br.readLine();
-
-                            }
-                            if(mac.equals(sentMac)){
-                                System.out.println(message);
-                            }
-                        }else if(confidentiality){
-                                System.out.println(decrypt(message, sessionKey));
                         }
-                    
-                        else if(!integrity && !confidentiality){
+                        String mac = generateMAC(message);
+                        String sentMac = br.readLine();
+                        while(br.ready()){
+                            sentMac += "\n";
+                            sentMac += br.readLine();
+
+                        }                        
+                        if(mac.equals(sentMac)){
                             System.out.println(message);
                         }
-                    }                 
+                    }
+                    else if(confidentiality){
+                        System.out.println(decrypt(message));
+                    }
+
+                
+                    else if(!integrity && !confidentiality){
+                        System.out.println(message);
+                    }
                 }
 
-            }else{
-                System.out.println("ERROR: Server and Client security settings must be the same \n");
-                server.sendOutput("security protocols declined \n");
-
-                socket.close();
             }
 
-           }
         }
-        catch (Exception e)
+        catch (Exception exception)
         {
-            e.printStackTrace();
+            exception.printStackTrace();
         }
         finally
         {
@@ -345,7 +335,10 @@ public class Server
             {
                 socket.close();
             }
-            catch(Exception e){}
+            catch(Exception e)
+            {
+                e.printStackTrace();
+            }
         }
     }
 }
