@@ -165,14 +165,14 @@ public class Client
     }
 
     public static String encrypt(String data, Key key) throws Exception {
-        Cipher c = Cipher.getInstance("AES");
+        Cipher c = Cipher.getInstance("AES/CBC/PKCS5Padding");
         c.init(Cipher.ENCRYPT_MODE, key);
         byte[] encVal = c.doFinal(data.getBytes());
         String encryptedValue = Base64.getEncoder().withoutPadding().encodeToString(encVal);
         return encryptedValue;
     }
     public static String decrypt(String encryptedData, Key key) throws Exception {
-        Cipher c = Cipher.getInstance("AES");
+        Cipher c = Cipher.getInstance("AES/CBC/PKCS5Padding");
 
         c.init(Cipher.DECRYPT_MODE, key);
         byte[] decodedValue =  Base64.getDecoder().decode(encryptedData.getBytes());
