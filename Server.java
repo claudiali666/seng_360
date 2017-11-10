@@ -16,12 +16,17 @@ import javax.crypto.spec.SecretKeySpec;
 import javax.crypto.spec.IvParameterSpec;
 import java.io.PrintStream;
 import java.io.*;
-
+import java.security.spec.X509EncodedKeySpec;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.nio.file.*;
+import java.nio.charset.StandardCharsets;
+import java.security.spec.InvalidKeySpecException;
 
 
 public class Server
 {
 
+    static final String ALGORITHM = "RSA";
     static final int CONFIDENTIALITY = 4;
     static final int INTEGRITY = 2;
     static final int AUTHENTICATION = 1;
@@ -31,6 +36,13 @@ public class Server
     static boolean integrity; 
 
     static int optionsSelected;
+    static SecretKey sessionKey; 
+
+    static PublicKey serverPublicKey;
+    static PrivateKey privateKey;
+    static PublicKey publicKeyClient;
+
+    static KeyPair keyPair;   
 
     int port;
     static ServerSocket serverSocket;
@@ -123,60 +135,75 @@ public class Server
         }
         return option;
     }
-    //Confidentiality - need to encrypt the messages sent over the network from the server and the client, symmetrically 
-    //and can assume that the public keys are already known 
 
-    private static Key generateKey() throws Exception{
-        Key skeySpec = new SecretKeySpec(key, "AES");
-        return skeySpec;
+    public static byte[] encrypt(byte[] publicKey, byte[] inputData) throws Exception {
+
+        PublicKey key = KeyFactory.getInstance(ALGORITHM).generatePublic(new X509EncodedKeySpec(publicKey));
+
+        Cipher cipher = Cipher.getInstance(ALGORITHM);
+        cipher.init(Cipher.PUBLIC_KEY, key);
+
+        byte[] encryptedBytes = cipher.doFinal(inputData);
+
+        return encryptedBytes;
     }
 
-    public static String encrypt(String data) throws Exception {
-        Key key = generateKey();
+    public static KeyPair generateKeyPair() throws NoSuchAlgorithmException, NoSuchProviderException {
+
+        KeyPairGenerator keyGen = KeyPairGenerator.getInstance(ALGORITHM);
+        SecureRandom random = SecureRandom.getInstance("SHA1PRNG", "SUN");
+
+        // 512 is keysize
+        keyGen.initialize(512, random);
+
+        KeyPair generateKeyPair = keyGen.generateKeyPair();
+        return generateKeyPair;
+    }
+    public static String encrypt(String data, Key key) throws Exception {
         Cipher c = Cipher.getInstance("AES");
         c.init(Cipher.ENCRYPT_MODE, key);
         byte[] encVal = c.doFinal(data.getBytes());
         String encryptedValue = Base64.getEncoder().withoutPadding().encodeToString(encVal);
         return encryptedValue;
     }
-
-    public static String decrypt(String encryptedData) throws Exception {
-        Key key = generateKey();
+    public static String decrypt(String encryptedData, Key key) throws Exception {
         Cipher c = Cipher.getInstance("AES");
-    
 
         c.init(Cipher.DECRYPT_MODE, key);
         byte[] decodedValue =  Base64.getDecoder().decode(encryptedData.getBytes());
         byte[] decryptedVal = c.doFinal(decodedValue);
-        return new String(decryptedVal);
+
+        return new String(decryptedVal, "UTF-8");
     }
-
-    private static String userInput(Scanner input){
-        String sendingMessage;
-        if(input.hasNext()){
-            sendingMessage = input.nextLine();
-            return sendingMessage;
-        }
-        return null;
-    }
-
-    //Integrity - need to ensure that the messages sent to and from the server are the same on both sides 
-
-    //Authenticaiton - need to ensure the identities of the client and server by using a username and password possibly 
 
     private static String generateMAC(String msg) throws Exception {
     // create a MAC and initialize with the key
         Mac mac  = Mac.getInstance("HmacSHA256");
-        Key key = generateKey();
-        mac.init(key);
+        mac.init(sessionKey);
 
         byte[] b = msg.getBytes("UTF-8");
-
         byte[] result = mac.doFinal(b);
 
         return new String(result);
 
+    }
 
+    private static SecretKey generateSessionKey(byte[] key) throws Exception{
+        KeyGenerator keygen = KeyGenerator.getInstance("AES"); // key generator to be used with AES algorithm.
+        keygen.init(256); // Key size is specified here.
+       
+        SecretKey skeySpec = new SecretKeySpec(key, "AES");
+        return skeySpec;
+    }
+
+    private static SecretKey generateSessionKey() throws Exception{
+        KeyGenerator keygen = KeyGenerator.getInstance("AES"); 
+        // key generator to be used with AES algorithm.
+        keygen.init(256); // Key size is specified here.
+        byte[] key = keygen.generateKey().getEncoded();
+       
+        SecretKey skeySpec = new SecretKeySpec(key, "AES");
+        return skeySpec;
     }
 
     public static void main(String[] args)
@@ -192,6 +219,8 @@ public class Server
             optionsSelected = getSecurity();
 
             optionsSelected();
+            while(true){
+            
             socket = serverSocket.accept();
 
             String clientOptionsSelected = null;
@@ -202,13 +231,28 @@ public class Server
             if(clientOptionsSelected.equals(String.valueOf(optionsSelected))){
                 server.sendOutput("security protocols accepted \n");
 
+                if(confidentiality || integrity){
+                    ObjectInputStream objIn = new ObjectInputStream(server.socket.getInputStream());
+                    publicKeyClient = (PublicKey) objIn.readObject();
+
+                    //generate a session key
+                    sessionKey = generateSessionKey();
+
+                    //encrypt the session key with server's public key
+                    byte[] encryptedSessionKey = encrypt(publicKeyClient.getEncoded(), sessionKey.getEncoded());
+
+                    //send the encrypted session key to the server
+                    ObjectOutputStream objOut = new ObjectOutputStream(socket.getOutputStream());
+                    objOut.writeObject(encryptedSessionKey);
+                }
+
                 while(true){
                     //User input
                     if(input.ready()){
                         sendingMessage = input.readLine();   
                         if(confidentiality){
                             // send the encrypted input 
-                            server.sendOutput(server.encrypt(sendingMessage) +"\n");
+                            server.sendOutput(server.encrypt(sendingMessage, sessionKey) +"\n");
                         }if(integrity){
                             //generate MAC
                             String mac = server.generateMAC(sendingMessage);
@@ -229,7 +273,7 @@ public class Server
                         message = br.readLine();
                         if(integrity){
                             if(confidentiality){
-                                message = decrypt(message);
+                                message = decrypt(message, sessionKey);
                             }
                             String mac = server.generateMAC(message);
                             
@@ -243,7 +287,7 @@ public class Server
                                 System.out.println(message);
                             }
                         }else if(confidentiality){
-                                System.out.println(decrypt(message));
+                                System.out.println(decrypt(message, sessionKey));
                         }
                     
                         else if(!integrity && !confidentiality){
@@ -259,7 +303,7 @@ public class Server
                 socket.close();
             }
 
-           
+           }
         }
         catch (Exception e)
         {
