@@ -212,7 +212,7 @@ public class Client
             messageDigest = MessageDigest.getInstance("SHA-256");
             messageDigest.update(pw.getBytes());
             digested =  bytesToHex((messageDigest.digest()));
-            System.out.println(pw +" hash to: "+digested);
+            //System.out.println(pw +" hash to: "+digested);
         }catch(NoSuchAlgorithmException e){
             e.printStackTrace();
         }
@@ -315,7 +315,7 @@ public class Client
                     System.out.println("Enter a password: ");
                     String password = reader.nextLine(); // Scans the next token of the input as an int.
                     if(compare(username,password) == true){
-                        System.out.println("sign in as "+ username);
+                        System.out.println("signed in as "+ username);
                         break;
                     }else{
                         System.out.println("invalid username/password input agian");
