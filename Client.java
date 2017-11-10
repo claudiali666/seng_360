@@ -19,6 +19,9 @@ import java.security.spec.InvalidKeySpecException;
 
 public class Client
 {
+    static final String ALGORITHM = "RSA";
+
+
     static final int CONFIDENTIALITY = 4;
     static final int INTEGRITY = 2;
     static final int AUTHENTICATION = 1;
@@ -132,7 +135,8 @@ public class Client
     }
 
     private static SecretKey generateSessionKey() throws Exception{
-        KeyGenerator keygen = KeyGenerator.getInstance("AES"); // key generator to be used with AES algorithm.
+        KeyGenerator keygen = KeyGenerator.getInstance("AES"); 
+        // key generator to be used with AES algorithm.
         keygen.init(256); // Key size is specified here.
         byte[] key = keygen.generateKey().getEncoded();
        
@@ -141,18 +145,18 @@ public class Client
     }
 
 
-   public static String encrypt(byte[] data) throws Exception {
-        //Key key = generateKey();
+   public static byte[] encrypt(byte[] publicKey, byte[] inputData) throws Exception {
 
-        Cipher c = Cipher.getInstance("RSA/ECB/PKCS1Padding");
-        c.init(Cipher.ENCRYPT_MODE, serverPublicKey);
-        byte[] encVal = c.doFinal(data);
-        String encryptedValue = Base64.getEncoder().withoutPadding().encodeToString(encVal);
+        PublicKey key = KeyFactory.getInstance(ALGORITHM)
+                .generatePublic(new X509EncodedKeySpec(publicKey));
 
-        return encryptedValue;
+        Cipher cipher = Cipher.getInstance(ALGORITHM);
+        cipher.init(Cipher.PUBLIC_KEY, key);
+
+        byte[] encryptedBytes = cipher.doFinal(inputData);
+
+        return encryptedBytes;
     }
-
-
 
     public static String decrypt(String encryptedData) throws Exception {
         //Key key = generateKey();
@@ -165,14 +169,14 @@ public class Client
     }
 
     public static String encrypt(String data, Key key) throws Exception {
-        Cipher c = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        Cipher c = Cipher.getInstance("AES");
         c.init(Cipher.ENCRYPT_MODE, key);
         byte[] encVal = c.doFinal(data.getBytes());
         String encryptedValue = Base64.getEncoder().withoutPadding().encodeToString(encVal);
         return encryptedValue;
     }
     public static String decrypt(String encryptedData, Key key) throws Exception {
-        Cipher c = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        Cipher c = Cipher.getInstance("AES");
 
         c.init(Cipher.DECRYPT_MODE, key);
         byte[] decodedValue =  Base64.getDecoder().decode(encryptedData.getBytes());
@@ -262,7 +266,7 @@ public class Client
                 sessionKey = generateSessionKey();
 
                 //encrypt the session key with server's public key
-                String encryptedSessionKey = encrypt(sessionKey.getEncoded());
+                byte[] encryptedSessionKey = encrypt(serverPublicKey.getEncoded(), sessionKey.getEncoded());
                 System.out.println("DECRYPTED SESSION KEY: "+sessionKey.getEncoded());
                 System.out.println("ENCRYPTED SESSION KEY: "+encryptedSessionKey);
 
