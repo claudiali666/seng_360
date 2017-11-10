@@ -40,7 +40,9 @@ public class Server
 
     static PublicKey publicKeyServer;
     static PrivateKey privateKey;
-    static PublicKey publicKeyClient;   
+    static PublicKey publicKeyClient;
+
+    static KeyPair keyPair;   
 
     int port;
     static ServerSocket serverSocket;
@@ -148,22 +150,18 @@ public class Server
         return encryptedBytes;
     }
 
-    public static byte[] decrypt(byte[] privateKey, byte[] inputData)
-            throws Exception {
+    public static byte[] decrypt(byte[] privateKey, byte[] inputData) throws Exception {
 
-        PrivateKey key = KeyFactory.getInstance(ALGORITHM)
-                .generatePrivate(new PKCS8EncodedKeySpec(privateKey));
+        PrivateKey key = KeyFactory.getInstance(ALGORITHM).generatePrivate(new PKCS8EncodedKeySpec(privateKey));
 
         Cipher cipher = Cipher.getInstance(ALGORITHM);
         cipher.init(Cipher.PRIVATE_KEY, key);
-
         byte[] decryptedBytes = cipher.doFinal(inputData);
 
         return decryptedBytes;
     }
 
-    public static KeyPair generateKeyPair()
-            throws NoSuchAlgorithmException, NoSuchProviderException {
+    public static KeyPair generateKeyPair() throws NoSuchAlgorithmException, NoSuchProviderException {
 
         KeyPairGenerator keyGen = KeyPairGenerator.getInstance(ALGORITHM);
         SecureRandom random = SecureRandom.getInstance("SHA1PRNG", "SUN");
@@ -184,7 +182,7 @@ public class Server
         return encryptedValue;
     }
     public static String decrypt(String encryptedData, Key key) throws Exception {
-        Cipher c = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        Cipher c = Cipher.getInstance("AES");
 
         c.init(Cipher.DECRYPT_MODE, key);
         byte[] decodedValue =  Base64.getDecoder().decode(encryptedData.getBytes());
@@ -260,21 +258,18 @@ public class Server
                     /* Receive the session key from the client... needs fix */
 
                     //generate servers public/private keys
-                    KeyPair keyPair = generateKeyPair();
+                    keyPair = generateKeyPair();
                     privateKey = keyPair.getPrivate();
                     publicKeyServer = keyPair.getPublic();
                     
                     ObjectOutputStream objOut = new ObjectOutputStream(socket.getOutputStream());
                     objOut.writeObject(publicKeyServer);
 
-
                     ObjectInputStream objIn = new ObjectInputStream(socket.getInputStream());
                     byte[] encryptedSessionKey = (byte[]) objIn.readObject();
-                    System.out.println("ENCRYPTED SESSION KEY: "+encryptedSessionKey);
 
                     //decrypt the session key with private key
                     byte[] decryptedSessionKey = decrypt(privateKey.getEncoded(), encryptedSessionKey);
-                    System.out.println("DECRYPTED SESSION KEY: "+decryptedSessionKey);
 
                     //generate the session key between client and server
                     sessionKey = generateSessionKey(decryptedSessionKey);
