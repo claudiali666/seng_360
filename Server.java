@@ -26,6 +26,7 @@ import java.security.spec.InvalidKeySpecException;
 public class Server
 {
 
+    static final String ALGORITHM = "RSA";
     static final int CONFIDENTIALITY = 4;
     static final int INTEGRITY = 2;
     static final int AUTHENTICATION = 1;
@@ -134,25 +135,49 @@ public class Server
     }
 
 
-    public static String encrypt(byte[] data) throws Exception {
-        Cipher c = Cipher.getInstance("RSA/ECB/PKCS1Padding");
-        c.init(Cipher.ENCRYPT_MODE, publicKeyServer);
-        byte[] encVal = c.doFinal(data);
-        String encryptedValue = Base64.getEncoder().withoutPadding().encodeToString(encVal);
-        return encryptedValue;
+    public static byte[] encrypt(byte[] publicKey, byte[] inputData) throws Exception {
+
+        PublicKey key = KeyFactory.getInstance(ALGORITHM)
+                .generatePublic(new X509EncodedKeySpec(publicKey));
+
+        Cipher cipher = Cipher.getInstance(ALGORITHM);
+        cipher.init(Cipher.PUBLIC_KEY, key);
+
+        byte[] encryptedBytes = cipher.doFinal(inputData);
+
+        return encryptedBytes;
     }
 
-    public static String decrypt(String encryptedData) throws Exception {
-        Cipher c = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+    public static byte[] decrypt(byte[] privateKey, byte[] inputData)
+            throws Exception {
 
-        c.init(Cipher.DECRYPT_MODE, privateKey);
-        byte[] decodedValue =  Base64.getDecoder().decode(encryptedData.getBytes());
-        byte[] decryptedVal = c.doFinal(decodedValue);
+        PrivateKey key = KeyFactory.getInstance(ALGORITHM)
+                .generatePrivate(new PKCS8EncodedKeySpec(privateKey));
 
-        return new String(decryptedVal, "UTF-8");
+        Cipher cipher = Cipher.getInstance(ALGORITHM);
+        cipher.init(Cipher.PRIVATE_KEY, key);
+
+        byte[] decryptedBytes = cipher.doFinal(inputData);
+
+        return decryptedBytes;
     }
+
+    public static KeyPair generateKeyPair()
+            throws NoSuchAlgorithmException, NoSuchProviderException {
+
+        KeyPairGenerator keyGen = KeyPairGenerator.getInstance(ALGORITHM);
+        SecureRandom random = SecureRandom.getInstance("SHA1PRNG", "SUN");
+
+        // 512 is keysize
+        keyGen.initialize(512, random);
+
+        KeyPair generateKeyPair = keyGen.generateKeyPair();
+        return generateKeyPair;
+    }
+
+  
     public static String encrypt(String data, Key key) throws Exception {
-        Cipher c = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        Cipher c = Cipher.getInstance("AES");
         c.init(Cipher.ENCRYPT_MODE, key);
         byte[] encVal = c.doFinal(data.getBytes());
         String encryptedValue = Base64.getEncoder().withoutPadding().encodeToString(encVal);
@@ -235,22 +260,24 @@ public class Server
                     /* Receive the session key from the client... needs fix */
 
                     //generate servers public/private keys
-                    genKeys();
+                    KeyPair keyPair = generateKeyPair();
+                    privateKey = keyPair.getPrivate();
+                    publicKeyServer = keyPair.getPublic();
                     
                     ObjectOutputStream objOut = new ObjectOutputStream(socket.getOutputStream());
                     objOut.writeObject(publicKeyServer);
 
 
                     ObjectInputStream objIn = new ObjectInputStream(socket.getInputStream());
-                    String encryptedSessionKey = (String) objIn.readObject();
+                    byte[] encryptedSessionKey = (byte[]) objIn.readObject();
                     System.out.println("ENCRYPTED SESSION KEY: "+encryptedSessionKey);
 
                     //decrypt the session key with private key
-                    String decryptedSessionKey = decrypt(encryptedSessionKey);
+                    byte[] decryptedSessionKey = decrypt(privateKey.getEncoded(), encryptedSessionKey);
                     System.out.println("DECRYPTED SESSION KEY: "+decryptedSessionKey);
 
                     //generate the session key between client and server
-                    sessionKey = generateSessionKey(decryptedSessionKey.getBytes());
+                    sessionKey = generateSessionKey(decryptedSessionKey);
                     System.out.println(new String(sessionKey.getEncoded()));
                 }
 
