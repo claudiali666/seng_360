@@ -146,20 +146,20 @@ public class Server
         Cipher c = Cipher.getInstance("RSA/ECB/PKCS1Padding");
 
         c.init(Cipher.DECRYPT_MODE, privateKey);
-        byte[] decodedValue =  Base64.getDecoder().decode(dataBytes);
+        byte[] decodedValue =  Base64.getDecoder().decode(encryptedData.getBytes());
         byte[] decryptedVal = c.doFinal(decodedValue);
 
         return new String(decryptedVal, "UTF-8");
     }
     public static String encrypt(String data, Key key) throws Exception {
-        Cipher c = Cipher.getInstance("AES");
+        Cipher c = Cipher.getInstance("AES/CBC/PKCS5Padding");
         c.init(Cipher.ENCRYPT_MODE, key);
         byte[] encVal = c.doFinal(data.getBytes());
         String encryptedValue = Base64.getEncoder().withoutPadding().encodeToString(encVal);
         return encryptedValue;
     }
     public static String decrypt(String encryptedData, Key key) throws Exception {
-        Cipher c = Cipher.getInstance("AES");
+        Cipher c = Cipher.getInstance("AES/CBC/PKCS5Padding");
 
         c.init(Cipher.DECRYPT_MODE, key);
         byte[] decodedValue =  Base64.getDecoder().decode(encryptedData.getBytes());
@@ -219,6 +219,8 @@ public class Server
             optionsSelected = getSecurity();
 
             optionsSelected();
+            while(true){
+            
             socket = serverSocket.accept();
 
             String clientOptionsSelected = null;
@@ -231,7 +233,7 @@ public class Server
 
                 if(confidentiality || integrity){
                     /* Receive the session key from the client... needs fix */
-                    
+
                     //generate servers public/private keys
                     genKeys();
                     
@@ -309,7 +311,7 @@ public class Server
                 socket.close();
             }
 
-           
+           }
         }
         catch (Exception e)
         {
